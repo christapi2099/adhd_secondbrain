@@ -33,9 +33,13 @@ export default function HomeScreen() {
     greeting = 'Good evening';
   }
 
-  // Navigate to calendar
+  // Navigation functions
   const goToCalendar = () => {
     router.push('/(tabs)/calendar');
+  };
+  
+  const goToTasks = () => {
+    router.push('/(tabs)/tasks');
   };
 
   return (
@@ -83,6 +87,33 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={[styles.card, { backgroundColor: themeColors.card, borderColor: themeColors.border, marginTop: 16 }]}
+            onPress={goToTasks}
+          >
+            <View style={styles.cardHeader}>
+              <Ionicons name="checkbox-outline" size={24} color={themeColors.buttonBackground} />
+              <Text style={[styles.cardTitle, { color: themeColors.text }]}>
+                Your Tasks
+              </Text>
+            </View>
+            
+            <Text style={[styles.cardDescription, { color: themeColors.secondaryText }]}>
+              Manage your tasks, set deadlines, and break down big assignments
+            </Text>
+            
+            <View style={styles.cardFooter}>
+              <TouchableOpacity 
+                style={[styles.button, { backgroundColor: themeColors.buttonBackground }]}
+                onPress={goToTasks}
+              >
+                <Text style={[styles.buttonText, { color: themeColors.buttonText }]}>
+                  View Tasks
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
         </View>
 
         <View style={[styles.section, { borderColor: themeColors.border }]}>
@@ -103,11 +134,11 @@ export default function HomeScreen() {
             
             <TouchableOpacity 
               style={[styles.quickAction, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}
-              onPress={goToCalendar}
+              onPress={goToTasks}
             >
-              <Ionicons name="sync" size={24} color="#34A853" />
+              <Ionicons name="add-circle-outline" size={24} color="#34A853" />
               <Text style={[styles.quickActionText, { color: themeColors.text }]}>
-                Sync Google
+                New Task
               </Text>
             </TouchableOpacity>
             

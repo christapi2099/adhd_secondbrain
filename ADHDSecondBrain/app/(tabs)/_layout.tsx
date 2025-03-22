@@ -1,5 +1,5 @@
-import { Tabs } from 'expo-router';
-import { useColorScheme } from 'react-native';
+import { Tabs, router } from 'expo-router';
+import { useColorScheme, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Colors } from '@/constants/Colors';
@@ -24,6 +24,14 @@ export default function TabLayout() {
           backgroundColor: isDark ? Colors.dark.background : Colors.light.background,
         },
         headerTintColor: isDark ? Colors.dark.text : Colors.light.text,
+        headerLeft: ({ tintColor }) => (
+          <TouchableOpacity 
+            style={{ marginLeft: 16 }}
+            onPress={() => router.push('/')}
+          >
+            <Ionicons name="home-outline" size={24} color={tintColor} />
+          </TouchableOpacity>
+        ),
       }}
     >
       <Tabs.Screen
@@ -38,6 +46,13 @@ export default function TabLayout() {
         options={{
           title: 'Calendar',
           tabBarIcon: ({ color }) => <Ionicons name="calendar" size={24} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="tasks"
+        options={{
+          title: 'Tasks',
+          tabBarIcon: ({ color }) => <Ionicons name="checkbox-outline" size={24} color={color} />,
         }}
       />
       <Tabs.Screen

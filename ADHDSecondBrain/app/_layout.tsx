@@ -1,12 +1,12 @@
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
+import { Stack, SplashScreen } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { useColorScheme } from 'react-native';
 import 'react-native-reanimated';
 
-import { useColorScheme } from '@/hooks/useColorScheme';
+import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -28,12 +28,43 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <AuthProvider>
+      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+        <RootLayoutNav />
+        <StatusBar style="auto" />
+      </ThemeProvider>
+    </AuthProvider>
+  );
+}
+// Navigation component that handles conditional rendering based on auth state
+function RootLayoutNav() {
+  const { user, isLoading } = useAuth();
+
+  // Show a loading screen while checking authentication
+  if (isLoading) {
+    return (
       <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
+        <Stack.Screen name="auth/AuthLoadingScreen" options={{ headerShown: false }} />
       </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    );
+  }
+
+  return (
+    <Stack>
+      {user ? (
+        // User is signed in - show main app screens
+        <>
+          <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="+not-found" options={{ title: 'Not Found' }} />
+        </>
+      ) : (
+        // User is not signed in - show auth screens
+        <>
+          <Stack.Screen name="auth/LoginScreen" options={{ headerShown: false }} />
+          <Stack.Screen name="auth/SignupScreen" options={{ title: 'Sign Up' }} />
+          <Stack.Screen name="auth/HomeScreen" options={{ headerShown: false }} />
+        </>
+      )}
+    </Stack>
   );
 }

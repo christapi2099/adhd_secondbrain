@@ -1,74 +1,256 @@
-import { Image, StyleSheet, Platform } from 'react-native';
-
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, useColorScheme } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Colors } from '@/constants/Colors';
+import { useAuth } from '@/contexts/AuthContext';
+import { router } from 'expo-router';
 
 export default function HomeScreen() {
+  const { user } = useAuth();
+  const colorScheme = useColorScheme() || 'light';
+  const isDark = colorScheme === 'dark';
+
+  // Theme colors
+  const themeColors = {
+    background: isDark ? Colors.dark.background : Colors.light.background,
+    text: isDark ? Colors.dark.text : Colors.light.text,
+    secondaryText: isDark ? '#9BA1A6' : '#666',
+    card: isDark ? '#2C2C2E' : '#FFFFFF',
+    border: isDark ? '#38383A' : '#E1E1E1',
+    buttonBackground: isDark ? Colors.dark.tint : Colors.light.tint,
+    buttonText: '#FFFFFF',
+  };
+
+  // Get current date and time
+  const now = new Date();
+  const hours = now.getHours();
+  
+  // Determine greeting based on time of day
+  let greeting = 'Good morning';
+  if (hours >= 12 && hours < 17) {
+    greeting = 'Good afternoon';
+  } else if (hours >= 17) {
+    greeting = 'Good evening';
+  }
+
+  // Navigate to calendar
+  const goToCalendar = () => {
+    router.push('/(tabs)/calendar');
+  };
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Hello Everyine!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12'
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this starter app.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+    <View style={[styles.container, { backgroundColor: themeColors.background }]}>
+      <View style={styles.header}>
+        <View>
+          <Text style={[styles.greeting, { color: themeColors.text }]}>
+            {greeting},
+          </Text>
+          <Text style={[styles.userName, { color: themeColors.text }]}>
+            {user?.name || 'User'}
+          </Text>
+        </View>
+      </View>
+
+      <ScrollView style={styles.content}>
+        <View style={[styles.section, { borderColor: themeColors.border }]}>
+          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
+            Today's Schedule
+          </Text>
+          
+          <TouchableOpacity 
+            style={[styles.card, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}
+            onPress={goToCalendar}
+          >
+            <View style={styles.cardHeader}>
+              <Ionicons name="calendar" size={24} color={themeColors.buttonBackground} />
+              <Text style={[styles.cardTitle, { color: themeColors.text }]}>
+                Your Calendar
+              </Text>
+            </View>
+            
+            <Text style={[styles.cardDescription, { color: themeColors.secondaryText }]}>
+              View and manage your schedule, events, and appointments
+            </Text>
+            
+            <View style={styles.cardFooter}>
+              <TouchableOpacity 
+                style={[styles.button, { backgroundColor: themeColors.buttonBackground }]}
+                onPress={goToCalendar}
+              >
+                <Text style={[styles.buttonText, { color: themeColors.buttonText }]}>
+                  View Calendar
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        <View style={[styles.section, { borderColor: themeColors.border }]}>
+          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
+            Quick Actions
+          </Text>
+          
+          <View style={styles.quickActions}>
+            <TouchableOpacity 
+              style={[styles.quickAction, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}
+              onPress={goToCalendar}
+            >
+              <Ionicons name="add-circle" size={24} color="#4285F4" />
+              <Text style={[styles.quickActionText, { color: themeColors.text }]}>
+                New Event
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.quickAction, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}
+              onPress={goToCalendar}
+            >
+              <Ionicons name="sync" size={24} color="#34A853" />
+              <Text style={[styles.quickActionText, { color: themeColors.text }]}>
+                Sync Google
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.quickAction, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}
+              onPress={goToCalendar}
+            >
+              <Ionicons name="today" size={24} color="#FBBC05" />
+              <Text style={[styles.quickActionText, { color: themeColors.text }]}>
+                Today
+              </Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity 
+              style={[styles.quickAction, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}
+              onPress={() => router.push('/(tabs)/profile')}
+            >
+              <Ionicons name="settings-outline" size={24} color="#EA4335" />
+              <Text style={[styles.quickActionText, { color: themeColors.text }]}>
+                Settings
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={[styles.section, { borderColor: themeColors.border }]}>
+          <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
+            ADHD Tips
+          </Text>
+          
+          <View style={[styles.tipCard, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
+            <Text style={[styles.tipTitle, { color: themeColors.text }]}>
+              Time Blocking
+            </Text>
+            <Text style={[styles.tipDescription, { color: themeColors.secondaryText }]}>
+              Allocate specific time blocks for different tasks to maintain focus and reduce context switching.
+            </Text>
+          </View>
+          
+          <View style={[styles.tipCard, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}>
+            <Text style={[styles.tipTitle, { color: themeColors.text }]}>
+              2-Minute Rule
+            </Text>
+            <Text style={[styles.tipDescription, { color: themeColors.secondaryText }]}>
+              If a task takes less than 2 minutes to complete, do it immediately instead of scheduling it for later.
+            </Text>
+          </View>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
+  container: {
+    flex: 1,
+  },
+  header: {
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 16,
+  },
+  greeting: {
+    fontSize: 16,
+  },
+  userName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  section: {
+    marginBottom: 24,
+    borderBottomWidth: 1,
+    paddingBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  card: {
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+  },
+  cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
-    gap: 8,
     marginBottom: 8,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  cardDescription: {
+    fontSize: 14,
+    marginBottom: 16,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  button: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+  },
+  buttonText: {
+    fontWeight: '500',
+  },
+  quickActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -8,
+  },
+  quickAction: {
+    width: '46%',
+    margin: '2%',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+  },
+  quickActionText: {
+    marginTop: 8,
+    fontWeight: '500',
+  },
+  tipCard: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+  },
+  tipTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  tipDescription: {
+    fontSize: 14,
   },
 });

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, useColorScheme } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, useColorScheme, Dimensions } from 'react-native';
 import { Colors } from '@/constants/Colors';
 import { 
   format, 
@@ -10,17 +10,24 @@ import {
   isSameDay, 
   addMonths, 
   subMonths,
-  getDay,
   startOfWeek,
   endOfWeek
 } from 'date-fns';
 import { CalendarEvent } from './types';
 import EventItem from './EventItem';
+import { Ionicons } from '@expo/vector-icons';
 
-export default function MonthlyView() {
+// Define props interface
+interface MonthlyViewProps {
+  events: CalendarEvent[];
+  onEventPress: (event: CalendarEvent) => void;
+  onAddEvent: (date?: Date) => void;
+  isSmallScreen: boolean;
+}
+
+export default function MonthlyView({ events, onEventPress, onAddEvent, isSmallScreen }: MonthlyViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
   const colorScheme = useColorScheme() || 'light';
   const isDark = colorScheme === 'dark';
 
@@ -35,40 +42,9 @@ export default function MonthlyView() {
     dayBackground: isDark ? '#2C2C2E' : '#FFFFFF',
     headerBackground: isDark ? '#1C1C1E' : '#F2F2F7',
     otherMonthDay: isDark ? '#38383A' : '#E1E1E1',
+    buttonBackground: isDark ? Colors.dark.tint : Colors.light.tint,
+    buttonText: '#FFFFFF',
   };
-
-  // Mock events - in a real app, these would come from a database or API
-  useEffect(() => {
-    // Simulate loading events
-    const mockEvents: CalendarEvent[] = [
-      {
-        id: '1',
-        title: 'Team Meeting',
-        start: new Date(currentDate.getFullYear(), currentDate.getMonth(), 10, 10, 0),
-        end: new Date(currentDate.getFullYear(), currentDate.getMonth(), 10, 11, 30),
-        category: 'work',
-        color: '#4285F4', // Google blue
-      },
-      {
-        id: '2',
-        title: 'Lunch with Alex',
-        start: new Date(currentDate.getFullYear(), currentDate.getMonth(), 15, 12, 30),
-        end: new Date(currentDate.getFullYear(), currentDate.getMonth(), 15, 13, 30),
-        category: 'personal',
-        color: '#FBBC05', // Google yellow
-      },
-      {
-        id: '3',
-        title: 'Doctor Appointment',
-        start: new Date(currentDate.getFullYear(), currentDate.getMonth(), 20, 15, 0),
-        end: new Date(currentDate.getFullYear(), currentDate.getMonth(), 20, 16, 0),
-        category: 'health',
-        color: '#34A853', // Google green
-      },
-    ];
-    
-    setEvents(mockEvents);
-  }, [currentDate]);
 
   // Navigate to previous month
   const goToPreviousMonth = () => {
@@ -100,18 +76,70 @@ export default function MonthlyView() {
   // Day names for the header
   const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+  // Calculate responsive sizes
+  const fontSize = {
+    header: isSmallScreen ? 14 : 16,
+    dayName: isSmallScreen ? 10 : 12,
+    dayNumber: isSmallScreen ? 12 : 14,
+    eventIndicator: isSmallScreen ? 5 : 6,
+  };
+
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { backgroundColor: themeColors.headerBackground }]}>
-        <TouchableOpacity onPress={goToPreviousMonth}>
-          <Text style={[styles.navButton, { color: themeColors.text }]}>{'<'}</Text>
+      <View style={[
+        styles.header, 
+        { 
+          backgroundColor: themeColors.headerBackground,
+          paddingVertical: isSmallScreen ? 8 : 12,
+        }
+      ]}>
+        <TouchableOpacity 
+          onPress={goToPreviousMonth}
+          style={styles.navButton}
+        >
+          <Ionicons 
+            name="chevron-back" 
+            size={isSmallScreen ? 20 : 24} 
+            color={themeColors.text} 
+          />
         </TouchableOpacity>
-        <Text style={[styles.headerText, { color: themeColors.text }]}>
+        
+        <Text style={[
+          styles.headerText, 
+          { 
+            color: themeColors.text,
+            fontSize: fontSize.header,
+          }
+        ]}>
           {format(currentDate, 'MMMM yyyy')}
         </Text>
-        <TouchableOpacity onPress={goToNextMonth}>
-          <Text style={[styles.navButton, { color: themeColors.text }]}>{'>'}</Text>
-        </TouchableOpacity>
+        
+        <View style={styles.headerButtons}>
+          <TouchableOpacity 
+            style={[
+              styles.addButton, 
+              { backgroundColor: themeColors.buttonBackground }
+            ]}
+            onPress={() => onAddEvent(selectedDate)}
+          >
+            <Ionicons 
+              name="add" 
+              size={isSmallScreen ? 20 : 22} 
+              color={themeColors.buttonText} 
+            />
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            onPress={goToNextMonth}
+            style={styles.navButton}
+          >
+            <Ionicons 
+              name="chevron-forward" 
+              size={isSmallScreen ? 20 : 24} 
+              color={themeColors.text} 
+            />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.calendarContainer}>
@@ -119,7 +147,13 @@ export default function MonthlyView() {
         <View style={styles.dayNamesRow}>
           {dayNames.map((name, index) => (
             <View key={index} style={styles.dayNameCell}>
-              <Text style={[styles.dayNameText, { color: themeColors.subText }]}>
+              <Text style={[
+                styles.dayNameText, 
+                { 
+                  color: themeColors.subText,
+                  fontSize: fontSize.dayName,
+                }
+              ]}>
                 {name}
               </Text>
             </View>
@@ -158,7 +192,8 @@ export default function MonthlyView() {
                           ? themeColors.today 
                           : isCurrentMonth 
                             ? themeColors.text 
-                            : themeColors.otherMonthDay 
+                            : themeColors.otherMonthDay,
+                      fontSize: fontSize.dayNumber,
                     },
                     isToday && !isSelected && styles.todayText
                   ]}
@@ -171,7 +206,15 @@ export default function MonthlyView() {
                     {dayEvents.slice(0, 3).map((event, eventIndex) => (
                       <View 
                         key={eventIndex} 
-                        style={[styles.eventIndicator, { backgroundColor: event.color }]} 
+                        style={[
+                          styles.eventIndicator, 
+                          { 
+                            backgroundColor: event.color,
+                            width: fontSize.eventIndicator,
+                            height: fontSize.eventIndicator,
+                            borderRadius: fontSize.eventIndicator / 2,
+                          }
+                        ]}
                       />
                     ))}
                     {dayEvents.length > 3 && (
@@ -189,13 +232,39 @@ export default function MonthlyView() {
 
       {/* Selected day events */}
       <View style={styles.selectedDayContainer}>
-        <Text style={[styles.selectedDayHeader, { color: themeColors.text }]}>
-          Events for {format(selectedDate, 'MMMM d, yyyy')}
-        </Text>
+        <View style={styles.selectedDayHeaderContainer}>
+          <Text style={[
+            styles.selectedDayHeader, 
+            { 
+              color: themeColors.text,
+              fontSize: isSmallScreen ? 14 : 16,
+            }
+          ]}>
+            Events for {format(selectedDate, 'MMMM d, yyyy')}
+          </Text>
+          <TouchableOpacity
+            style={[
+              styles.addDayEventButton,
+              { backgroundColor: themeColors.buttonBackground }
+            ]}
+            onPress={() => onAddEvent(selectedDate)}
+          >
+            <Ionicons 
+              name="add" 
+              size={isSmallScreen ? 16 : 18} 
+              color={themeColors.buttonText} 
+            />
+          </TouchableOpacity>
+        </View>
         <ScrollView style={styles.eventsContainer}>
           {getEventsForDay(selectedDate).length > 0 ? (
             getEventsForDay(selectedDate).map(event => (
-              <EventItem key={event.id} event={event} />
+              <EventItem 
+                key={event.id} 
+                event={event} 
+                onPress={() => onEventPress(event)}
+                compact={isSmallScreen}
+              />
             ))
           ) : (
             <Text style={[styles.noEventsText, { color: themeColors.subText }]}>
@@ -225,10 +294,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   navButton: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    padding: 8,
+    padding: 4,
+  },
+  addButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
   },
   calendarContainer: {
     marginBottom: 16,
@@ -285,10 +364,22 @@ const styles = StyleSheet.create({
     flex: 1,
     marginTop: 8,
   },
+  selectedDayHeaderContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   selectedDayHeader: {
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 8,
+  },
+  addDayEventButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   eventsContainer: {
     flex: 1,

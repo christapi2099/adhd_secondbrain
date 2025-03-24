@@ -35,11 +35,11 @@ export default function HomeScreen() {
 
   // Navigation functions
   const goToCalendar = () => {
-    router.push('/(tabs)/calendar');
+    router.push('/calendar');
   };
   
   const goToTasks = () => {
-    router.push('/(tabs)/tasks');
+    router.push('/tasks');
   };
 
   return (
@@ -154,7 +154,7 @@ export default function HomeScreen() {
             
             <TouchableOpacity 
               style={[styles.quickAction, { backgroundColor: themeColors.card, borderColor: themeColors.border }]}
-              onPress={() => router.push('/(tabs)/profile')}
+              onPress={() => router.push('/profile')}
             >
               <Ionicons name="settings-outline" size={24} color="#EA4335" />
               <Text style={[styles.quickActionText, { color: themeColors.text }]}>

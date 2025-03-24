@@ -7,13 +7,18 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
-  ActivityIndicator,
   useColorScheme,
   Alert,
+  Dimensions,
 } from 'react-native';
 import { Colors } from '@/constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
 import { Task, SubTask, TaskPriority, PriorityColors } from './types';
+import { createObjectId, getCurrentTimestamp } from '@/app/storage';
+
+// Get screen dimensions for responsive sizing
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const isSmallScreen = SCREEN_WIDTH < 375; // Adjust for smaller Android screens
 
 interface TaskBreakdownModalProps {
   visible: boolean;
@@ -30,8 +35,6 @@ export default function TaskBreakdownModal({
 }: TaskBreakdownModalProps) {
   const [subtasks, setSubtasks] = useState<SubTask[]>([]);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generationPrompt, setGenerationPrompt] = useState('');
   
   const colorScheme = useColorScheme() || 'light';
   const isDark = colorScheme === 'dark';
@@ -57,7 +60,6 @@ export default function TaskBreakdownModal({
   useEffect(() => {
     if (visible && task) {
       setSubtasks(task.subtasks || []);
-      setGenerationPrompt(`Break down the task "${task.title}" into smaller, manageable steps.`);
     }
   }, [visible, task]);
 
@@ -69,7 +71,7 @@ export default function TaskBreakdownModal({
       id: Date.now().toString(),
       title: newSubtaskTitle.trim(),
       completed: false,
-      order: subtasks.length, // Add order property based on current length
+      orderIndex: subtasks.length, // Add orderIndex property based on current length
     };
     
     setSubtasks([...subtasks, newSubtask]);
@@ -135,10 +137,10 @@ export default function TaskBreakdownModal({
     newSubtasks[index] = newSubtasks[index - 1];
     newSubtasks[index - 1] = temp;
     
-    // Update order property for all subtasks
+    // Update orderIndex property for all subtasks
     const updatedSubtasks = newSubtasks.map((subtask, idx) => ({
       ...subtask,
-      order: idx
+      orderIndex: idx
     }));
     
     setSubtasks(updatedSubtasks);
@@ -154,10 +156,10 @@ export default function TaskBreakdownModal({
     newSubtasks[index] = newSubtasks[index + 1];
     newSubtasks[index + 1] = temp;
     
-    // Update order property for all subtasks
+    // Update orderIndex property for all subtasks
     const updatedSubtasks = newSubtasks.map((subtask, idx) => ({
       ...subtask,
-      order: idx
+      orderIndex: idx
     }));
     
     setSubtasks(updatedSubtasks);
@@ -181,78 +183,47 @@ export default function TaskBreakdownModal({
     onClose();
   };
 
-  // Mock function to simulate Ollama API call
-  const generateSubtasksWithOllama = async () => {
-    if (!task) return;
+  // Add template subtasks based on task type
+  const addTemplateSubtasks = (templateType: 'basic' | 'project' | 'study') => {
+    let templateSubtasks: SubTask[] = [];
     
-    setIsGenerating(true);
-    
-    try {
-      // In a real implementation, this would be an API call to Ollama
-      // For now, we'll simulate a delay and return mock data
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Generate subtasks based on the task type
-      let generatedSubtasks: SubTask[] = [];
-      
-      if (task.title.toLowerCase().includes('project')) {
-        generatedSubtasks = [
-          { id: `gen-${Date.now()}-1`, title: 'Research and gather information', completed: false, order: subtasks.length },
-          { id: `gen-${Date.now()}-2`, title: 'Create project outline', completed: false, order: subtasks.length + 1 },
-          { id: `gen-${Date.now()}-3`, title: 'Draft initial content', completed: false, order: subtasks.length + 2 },
-          { id: `gen-${Date.now()}-4`, title: 'Review and revise', completed: false, order: subtasks.length + 3 },
-          { id: `gen-${Date.now()}-5`, title: 'Finalize and submit', completed: false, order: subtasks.length + 4 },
+    switch (templateType) {
+      case 'basic':
+        templateSubtasks = [
+          { id: `template-${Date.now()}-1`, title: 'Plan and organize', completed: false, orderIndex: subtasks.length },
+          { id: `template-${Date.now()}-2`, title: 'Gather necessary materials', completed: false, orderIndex: subtasks.length + 1 },
+          { id: `template-${Date.now()}-3`, title: 'Execute main task', completed: false, orderIndex: subtasks.length + 2 },
+          { id: `template-${Date.now()}-4`, title: 'Review and check for errors', completed: false, orderIndex: subtasks.length + 3 },
+          { id: `template-${Date.now()}-5`, title: 'Finalize and complete', completed: false, orderIndex: subtasks.length + 4 },
         ];
-      } else if (task.title.toLowerCase().includes('presentation')) {
-        generatedSubtasks = [
-          { id: `gen-${Date.now()}-1`, title: 'Define presentation goals and audience', completed: false, order: subtasks.length },
-          { id: `gen-${Date.now()}-2`, title: 'Create outline and structure', completed: false, order: subtasks.length + 1 },
-          { id: `gen-${Date.now()}-3`, title: 'Design slides', completed: false, order: subtasks.length + 2 },
-          { id: `gen-${Date.now()}-4`, title: 'Practice delivery', completed: false, order: subtasks.length + 3 },
-          { id: `gen-${Date.now()}-5`, title: 'Gather feedback and revise', completed: false, order: subtasks.length + 4 },
+        break;
+      case 'project':
+        templateSubtasks = [
+          { id: `template-${Date.now()}-1`, title: 'Research and gather information', completed: false, orderIndex: subtasks.length },
+          { id: `template-${Date.now()}-2`, title: 'Create project outline', completed: false, orderIndex: subtasks.length + 1 },
+          { id: `template-${Date.now()}-3`, title: 'Draft initial content', completed: false, orderIndex: subtasks.length + 2 },
+          { id: `template-${Date.now()}-4`, title: 'Review and revise', completed: false, orderIndex: subtasks.length + 3 },
+          { id: `template-${Date.now()}-5`, title: 'Finalize and submit', completed: false, orderIndex: subtasks.length + 4 },
         ];
-      } else if (task.title.toLowerCase().includes('essay') || task.title.toLowerCase().includes('paper')) {
-        generatedSubtasks = [
-          { id: `gen-${Date.now()}-1`, title: 'Research topic and gather sources', completed: false, order: subtasks.length },
-          { id: `gen-${Date.now()}-2`, title: 'Create thesis statement and outline', completed: false, order: subtasks.length + 1 },
-          { id: `gen-${Date.now()}-3`, title: 'Write first draft', completed: false, order: subtasks.length + 2 },
-          { id: `gen-${Date.now()}-4`, title: 'Edit for content and structure', completed: false, order: subtasks.length + 3 },
-          { id: `gen-${Date.now()}-5`, title: 'Proofread for grammar and spelling', completed: false, order: subtasks.length + 4 },
-          { id: `gen-${Date.now()}-6`, title: 'Format citations and bibliography', completed: false, order: subtasks.length + 5 },
+        break;
+      case 'study':
+        templateSubtasks = [
+          { id: `template-${Date.now()}-1`, title: 'Gather study materials', completed: false, orderIndex: subtasks.length },
+          { id: `template-${Date.now()}-2`, title: 'Create study plan', completed: false, orderIndex: subtasks.length + 1 },
+          { id: `template-${Date.now()}-3`, title: 'Review key concepts', completed: false, orderIndex: subtasks.length + 2 },
+          { id: `template-${Date.now()}-4`, title: 'Practice with examples/problems', completed: false, orderIndex: subtasks.length + 3 },
+          { id: `template-${Date.now()}-5`, title: 'Self-test knowledge', completed: false, orderIndex: subtasks.length + 4 },
         ];
-      } else {
-        // Generic subtasks for any other type of task
-        generatedSubtasks = [
-          { id: `gen-${Date.now()}-1`, title: 'Define specific goals and outcomes', completed: false, order: subtasks.length },
-          { id: `gen-${Date.now()}-2`, title: 'Break down into smaller steps', completed: false, order: subtasks.length + 1 },
-          { id: `gen-${Date.now()}-3`, title: 'Allocate time for each step', completed: false, order: subtasks.length + 2 },
-          { id: `gen-${Date.now()}-4`, title: 'Gather necessary resources', completed: false, order: subtasks.length + 3 },
-          { id: `gen-${Date.now()}-5`, title: 'Set checkpoints for progress review', completed: false, order: subtasks.length + 4 },
-        ];
-      }
-      
-      // Merge with existing subtasks, avoiding duplicates
-      const existingTitles = subtasks.map(st => st.title.toLowerCase());
-      const newSubtasks = generatedSubtasks.filter(
-        st => !existingTitles.includes(st.title.toLowerCase())
-      );
-      
-      setSubtasks([...subtasks, ...newSubtasks]);
-      
-      Alert.alert(
-        'Subtasks Generated',
-        'Ollama has suggested some subtasks based on your task. Feel free to edit or remove them as needed.',
-        [{ text: 'OK' }]
-      );
-    } catch (error) {
-      Alert.alert(
-        'Generation Failed',
-        'Failed to generate subtasks. Please try again or add them manually.',
-        [{ text: 'OK' }]
-      );
-    } finally {
-      setIsGenerating(false);
+        break;
     }
+    
+    // Merge with existing subtasks, avoiding duplicates
+    const existingTitles = subtasks.map(st => st.title.toLowerCase());
+    const newSubtasks = templateSubtasks.filter(
+      st => !existingTitles.includes(st.title.toLowerCase())
+    );
+    
+    setSubtasks([...subtasks, ...newSubtasks]);
   };
 
   // Render a subtask item
@@ -456,7 +427,13 @@ export default function TaskBreakdownModal({
       onRequestClose={onClose}
     >
       <View style={styles.modalOverlay}>
-        <View style={[styles.modalContainer, { backgroundColor: themeColors.modalBackground }]}>
+        <View style={[
+          styles.modalContainer, 
+          { 
+            backgroundColor: themeColors.modalBackground,
+            width: isSmallScreen ? '95%' : '90%',
+          }
+        ]}>
           <View style={styles.modalHeader}>
             <Text style={[styles.modalTitle, { color: themeColors.text }]}>
               Break Down Task
@@ -480,49 +457,9 @@ export default function TaskBreakdownModal({
               </View>
             )}
 
-            <View style={styles.generationContainer}>
-              <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
-                Generate Subtasks with Ollama
-              </Text>
-              <TextInput
-                style={[
-                  styles.promptInput,
-                  {
-                    backgroundColor: themeColors.inputBackground,
-                    borderColor: themeColors.inputBorder,
-                    color: themeColors.text,
-                  },
-                ]}
-                value={generationPrompt}
-                onChangeText={setGenerationPrompt}
-                placeholder="Enter a prompt for Ollama"
-                placeholderTextColor={themeColors.subText}
-                multiline
-                numberOfLines={3}
-                textAlignVertical="top"
-              />
-              <TouchableOpacity
-                style={[
-                  styles.generateButton,
-                  { backgroundColor: themeColors.buttonPrimary },
-                  isGenerating && { opacity: 0.7 },
-                ]}
-                onPress={generateSubtasksWithOllama}
-                disabled={isGenerating || !generationPrompt.trim()}
-              >
-                {isGenerating ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                ) : (
-                  <Text style={[styles.generateButtonText, { color: themeColors.buttonText }]}>
-                    Generate with Ollama
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </View>
-
             <View style={styles.subtasksContainer}>
               <Text style={[styles.sectionTitle, { color: themeColors.text }]}>
-                Subtasks
+                Add Subtasks
               </Text>
               
               <View style={styles.addSubtaskContainer}>
@@ -552,11 +489,43 @@ export default function TaskBreakdownModal({
                   <Ionicons name="add" size={24} color="#FFFFFF" />
                 </TouchableOpacity>
               </View>
+
+              <View style={styles.templateButtonsContainer}>
+                <Text style={[styles.templateText, { color: themeColors.text }]}>
+                  Or use a template:
+                </Text>
+                <View style={styles.templateButtons}>
+                  <TouchableOpacity
+                    style={[styles.templateButton, { backgroundColor: themeColors.buttonSecondary }]}
+                    onPress={() => addTemplateSubtasks('basic')}
+                  >
+                    <Text style={[styles.templateButtonText, { color: themeColors.buttonSecondaryText }]}>
+                      Basic
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.templateButton, { backgroundColor: themeColors.buttonSecondary }]}
+                    onPress={() => addTemplateSubtasks('project')}
+                  >
+                    <Text style={[styles.templateButtonText, { color: themeColors.buttonSecondaryText }]}>
+                      Project
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.templateButton, { backgroundColor: themeColors.buttonSecondary }]}
+                    onPress={() => addTemplateSubtasks('study')}
+                  >
+                    <Text style={[styles.templateButtonText, { color: themeColors.buttonSecondaryText }]}>
+                      Study
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
               
               <View style={styles.subtasksList}>
                 {subtasks.length === 0 ? (
                   <Text style={[styles.emptyText, { color: themeColors.subText }]}>
-                    No subtasks yet. Add some manually or generate with Ollama.
+                    No subtasks yet. Add some manually or use a template.
                   </Text>
                 ) : (
                   subtasks.map(renderSubtaskItem)
@@ -565,7 +534,7 @@ export default function TaskBreakdownModal({
             </View>
           </ScrollView>
 
-          <View style={styles.buttonContainer}>
+          <View style={[styles.buttonContainer, { borderTopColor: themeColors.border }]}>
             <TouchableOpacity
               style={[styles.button, styles.cancelButton, { backgroundColor: themeColors.buttonSecondary }]}
               onPress={onClose}
@@ -598,7 +567,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContainer: {
-    width: '90%',
     maxHeight: '90%',
     borderRadius: 12,
     overflow: 'hidden',
@@ -646,35 +614,13 @@ const styles = StyleSheet.create({
   taskDescription: {
     fontSize: 14,
   },
-  generationContainer: {
-    marginBottom: 24,
+  subtasksContainer: {
+    marginBottom: 16,
   },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 12,
-  },
-  promptInput: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 16,
-    marginBottom: 12,
-    minHeight: 80,
-  },
-  generateButton: {
-    height: 44,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  generateButtonText: {
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  subtasksContainer: {
-    marginBottom: 16,
   },
   addSubtaskContainer: {
     flexDirection: 'row',
@@ -695,6 +641,30 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  templateButtonsContainer: {
+    marginBottom: 16,
+  },
+  templateText: {
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  templateButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  templateButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 4,
+  },
+  templateButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   subtasksList: {
     marginBottom: 16,
@@ -809,7 +779,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     padding: 16,
     borderTopWidth: 1,
-    borderTopColor: '#E1E1E1',
   },
   button: {
     paddingVertical: 10,

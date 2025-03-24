@@ -3,9 +3,11 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, useColorScheme, A
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { useStorage, useQuery, createObjectId, getCurrentTimestamp } from '@/app/storage';
+import { TABLES, TaskEntity, SubTaskEntity } from '@/app/storage/database';
 
 // Import task types and components
-import { Task } from '../tasks/types';
+import { Task, SubTask, TaskPriority } from '../tasks/types';
 import TaskItem from '../tasks/TaskItem';
 import AddTaskModal from '../tasks/AddTaskModal';
 import TaskBreakdownModal from '../tasks/TaskBreakdownModal';
@@ -36,69 +38,163 @@ export default function TasksScreen() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [activeFilter, setActiveFilter] = useState<'all' | 'active' | 'completed'>('all');
 
-  // Load mock tasks on initial render
+  // Get Storage instance
+  const storage = useStorage();
+  
+  // Query tasks from SQLite database
+  const { results: sqliteTasks, isLoading } = useQuery(TABLES.TASK);
+  
+  // Load tasks from SQLite database
   useEffect(() => {
-    // In a real app, this would load from a database or API
-    const mockTasks: Task[] = [
-      {
-        id: '1',
-        title: 'Complete project proposal',
-        description: 'Finish the draft and send for review',
-        dueDate: new Date(new Date().setDate(new Date().getDate() + 2)),
-        priority: 'high',
-        completed: false,
-        checkInFrequency: 'daily',
-        subtasks: [
-          { id: '1-1', title: 'Research competitors', completed: true, order: 1 },
-          { id: '1-2', title: 'Create outline', completed: true, order: 2 },
-          { id: '1-3', title: 'Write first draft', completed: false, order: 3 },
-          { id: '1-4', title: 'Review and edit', completed: false, order: 4 },
-        ],
-      },
-      {
-        id: '2',
-        title: 'Schedule doctor appointment',
-        dueDate: new Date(new Date().setDate(new Date().getDate() + 5)),
-        priority: 'medium',
-        completed: false,
-        checkInFrequency: 'weekly',
-      },
-      {
-        id: '3',
-        title: 'Buy groceries',
-        description: 'Get items for the week',
-        dueDate: new Date(new Date().setDate(new Date().getDate() + 1)),
-        priority: 'low',
-        completed: false,
-        checkInFrequency: 'none',
-      },
-    ];
+    if (!user || !storage.isReady || isLoading) return;
     
-    setTasks(mockTasks);
-  }, []);
-
-  // Handle adding a new task
-  const handleAddTask = (taskData: Omit<Task, 'id'>) => {
-    const newTask: Task = {
-      ...taskData,
-      id: Date.now().toString(),
+    const loadTasks = async () => {
+      try {
+        // Get tasks for the current user
+        const userTasksQuery = await storage.getByFilter(TABLES.TASK, 'userId', user.id);
+        
+        // Convert to Task objects and load subtasks
+        const userTasksWithSubtasks = await Promise.all(userTasksQuery.map(async (sqliteTask) => {
+          const task = sqliteTask as TaskEntity;
+          // Get subtasks for this task
+          const subtasks = await storage.getSubtasks(task._id);
+          
+          // Convert SQLite object to plain JS object
+          const taskObj: Task = {
+            id: task._id,
+            title: task.title,
+            description: task.description,
+            dueDate: new Date(task.dueDate),
+            priority: task.priority as TaskPriority,
+            completed: task.completed,
+            checkInFrequency: task.checkInFrequency,
+            subtasks: subtasks.length > 0 ? 
+              subtasks.map((subtaskItem) => {
+                const subTask = subtaskItem as SubTaskEntity;
+                return {
+                  id: subTask._id,
+                  title: subTask.title,
+                  completed: subTask.completed,
+                  priority: subTask.priority as TaskPriority,
+                  timeEstimate: subTask.timeEstimate,
+                  orderIndex: subTask.orderIndex
+                };
+              }).sort((a, b) => a.orderIndex - b.orderIndex) :
+              undefined
+          };
+          
+          return taskObj;
+        }));
+        
+        // Sort tasks
+        const sortedTasks = userTasksWithSubtasks.sort((a, b) => {
+          // First sort by completion status
+          if (a.completed && !b.completed) return 1;
+          if (!a.completed && b.completed) return -1;
+          
+          // Then sort by due date
+          const dateA = new Date(a.dueDate).getTime();
+          const dateB = new Date(b.dueDate).getTime();
+          if (dateA !== dateB) return dateA - dateB;
+          
+          // Then sort by priority
+          const priorityOrder = { high: 0, medium: 1, low: 2 };
+          return priorityOrder[a.priority] - priorityOrder[b.priority];
+        });
+        
+        setTasks(sortedTasks);
+      } catch (error) {
+        console.error('Error loading tasks:', error);
+        Alert.alert('Error', 'Failed to load tasks. Please try again.');
+      }
     };
     
-    setTasks([...tasks, newTask]);
+    loadTasks();
+  }, [user, storage.isReady, isLoading, sqliteTasks]);
+
+  // Handle adding a new task
+  const handleAddTask = async (taskData: Omit<Task, 'id'>) => {
+    if (!user || !storage.isReady) return;
+    
+    try {
+      await storage.write(async () => {
+        // Create the task first
+        const taskId = createObjectId();
+        await storage.create(TABLES.TASK, {
+          _id: taskId,
+          userId: user.id,
+          title: taskData.title,
+          description: taskData.description,
+          dueDate: taskData.dueDate,
+          priority: taskData.priority,
+          completed: taskData.completed || false,
+          checkInFrequency: taskData.checkInFrequency,
+        } as Omit<TaskEntity, '_id' | 'createdAt' | 'updatedAt'> & { _id?: string });
+        
+        // Create subtasks if they exist
+        if (taskData.subtasks && taskData.subtasks.length > 0) {
+          for (const subtask of taskData.subtasks) {
+            await storage.create(TABLES.SUBTASK, {
+              _id: createObjectId(),
+              taskId: taskId,
+              title: subtask.title,
+              completed: subtask.completed,
+              priority: subtask.priority,
+              timeEstimate: subtask.timeEstimate,
+              orderIndex: subtask.orderIndex,
+            } as Omit<SubTaskEntity, '_id' | 'createdAt' | 'updatedAt'> & { _id?: string });
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Error adding task:', error);
+      Alert.alert('Error', 'Failed to add task. Please try again.');
+    }
   };
 
   // Handle editing an existing task
-  const handleEditTask = (taskData: Omit<Task, 'id'>) => {
-    if (!selectedTask) return;
+  const handleEditTask = async (taskData: Omit<Task, 'id'>) => {
+    if (!selectedTask || !storage.isReady) return;
     
-    const updatedTasks = tasks.map(task => 
-      task.id === selectedTask.id 
-        ? { ...taskData, id: task.id } 
-        : task
-    );
-    
-    setTasks(updatedTasks);
-    setSelectedTask(null);
+    try {
+      await storage.write(async () => {
+        // Update the task
+        await storage.update(TABLES.TASK, selectedTask.id, {
+          title: taskData.title,
+          description: taskData.description,
+          dueDate: taskData.dueDate,
+          priority: taskData.priority,
+          completed: taskData.completed || false,
+          checkInFrequency: taskData.checkInFrequency,
+        } as Partial<Omit<TaskEntity, '_id' | 'createdAt'>>);
+        
+        // Delete existing subtasks
+        const existingSubtasks = await storage.getSubtasks(selectedTask.id);
+        for (const subtask of existingSubtasks) {
+          await storage.delete(TABLES.SUBTASK, subtask._id);
+        }
+        
+        // Create new subtasks if they exist
+        if (taskData.subtasks && taskData.subtasks.length > 0) {
+          for (const subtask of taskData.subtasks) {
+            await storage.create(TABLES.SUBTASK, {
+              _id: createObjectId(),
+              taskId: selectedTask.id,
+              title: subtask.title,
+              completed: subtask.completed,
+              priority: subtask.priority,
+              timeEstimate: subtask.timeEstimate,
+              orderIndex: subtask.orderIndex,
+            } as Omit<SubTaskEntity, '_id' | 'createdAt' | 'updatedAt'> & { _id?: string });
+          }
+        }
+      });
+      
+      setSelectedTask(null);
+    } catch (error) {
+      console.error('Error editing task:', error);
+      Alert.alert('Error', 'Failed to edit task. Please try again.');
+    }
   };
 
   // Handle deleting a task
@@ -113,9 +209,24 @@ export default function TasksScreen() {
         },
         {
           text: 'Delete',
-          onPress: () => {
-            const updatedTasks = tasks.filter(task => task.id !== taskId);
-            setTasks(updatedTasks);
+          onPress: async () => {
+            if (!storage.isReady) return;
+            
+            try {
+              await storage.write(async () => {
+                // Delete subtasks first (foreign key constraint will handle this in SQLite)
+                const subtasks = await storage.getSubtasks(taskId);
+                for (const subtask of subtasks) {
+                  await storage.delete(TABLES.SUBTASK, subtask._id);
+                }
+                
+                // Delete the task
+                await storage.delete(TABLES.TASK, taskId);
+              });
+            } catch (error) {
+              console.error('Error deleting task:', error);
+              Alert.alert('Error', 'Failed to delete task. Please try again.');
+            }
           },
           style: 'destructive',
         },
@@ -124,14 +235,24 @@ export default function TasksScreen() {
   };
 
   // Handle toggling task completion
-  const handleToggleComplete = (taskId: string) => {
-    const updatedTasks = tasks.map(task => 
-      task.id === taskId 
-        ? { ...task, completed: !task.completed } 
-        : task
-    );
+  const handleToggleComplete = async (taskId: string) => {
+    if (!storage.isReady) return;
     
-    setTasks(updatedTasks);
+    try {
+      // Find the task
+      const task = tasks.find(t => t.id === taskId);
+      if (!task) return;
+      
+      await storage.write(async () => {
+        // Toggle completion
+        await storage.update(TABLES.TASK, taskId, {
+          completed: !task.completed,
+        } as Partial<Omit<TaskEntity, '_id' | 'createdAt'>>);
+      });
+    } catch (error) {
+      console.error('Error toggling task completion:', error);
+      Alert.alert('Error', 'Failed to update task. Please try again.');
+    }
   };
 
   // Open add task modal
@@ -153,12 +274,41 @@ export default function TasksScreen() {
   };
 
   // Update task with new subtasks
-  const handleUpdateTaskWithSubtasks = (updatedTask: Task) => {
-    const updatedTasks = tasks.map(task => 
-      task.id === updatedTask.id ? updatedTask : task
-    );
+  const handleUpdateTaskWithSubtasks = async (updatedTask: Task) => {
+    if (!storage.isReady) return;
     
-    setTasks(updatedTasks);
+    try {
+      await storage.write(async () => {
+        // Delete existing subtasks
+        const existingSubtasks = await storage.getSubtasks(updatedTask.id);
+        for (const subtask of existingSubtasks) {
+          await storage.delete(TABLES.SUBTASK, subtask._id);
+        }
+        
+        // Create new subtasks
+        if (updatedTask.subtasks && updatedTask.subtasks.length > 0) {
+          for (const subtask of updatedTask.subtasks) {
+            await storage.create(TABLES.SUBTASK, {
+              _id: createObjectId(),
+              taskId: updatedTask.id,
+              title: subtask.title,
+              completed: subtask.completed,
+              priority: subtask.priority,
+              timeEstimate: subtask.timeEstimate,
+              orderIndex: subtask.orderIndex,
+            } as Omit<SubTaskEntity, '_id' | 'createdAt' | 'updatedAt'> & { _id?: string });
+          }
+        }
+        
+        // Update the task's updatedAt timestamp
+        await storage.update(TABLES.TASK, updatedTask.id, {
+          updatedAt: getCurrentTimestamp(),
+        } as Partial<Omit<TaskEntity, '_id' | 'createdAt'>>);
+      });
+    } catch (error) {
+      console.error('Error updating task subtasks:', error);
+      Alert.alert('Error', 'Failed to update task subtasks. Please try again.');
+    }
   };
 
   // Filter tasks based on active filter

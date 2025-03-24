@@ -45,7 +45,7 @@ export default function Index() {
   // Navigate to calendar with specific view
   const navigateToCalendarView = (view: 'daily' | 'weekly' | 'monthly') => {
     router.push({
-      pathname: "/(tabs)/calendar",
+      pathname: "/calendar",
       params: { view }
     });
   };

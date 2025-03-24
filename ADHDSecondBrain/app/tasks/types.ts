@@ -15,7 +15,7 @@ export interface SubTask {
   completed: boolean;
   priority?: TaskPriority; // Optional priority level for subtask
   timeEstimate?: number;   // Optional time estimate in minutes
-  order: number;           // For drag and drop reordering
+  orderIndex: number;      // For drag and drop reordering (renamed from 'order' to avoid SQLite reserved keyword)
 }
 
 // Define task interface

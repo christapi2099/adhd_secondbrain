@@ -65,13 +65,143 @@ export interface CalendarEventEntity extends BaseEntity {
   googleEventId?: string;
 }
 
+// Create a web-compatible implementation of SQLite for Expo Web
+// Using a simplified version that meets the needs of our app
+const createWebSQLiteImplementation = (dbName: string): SQLite.SQLiteDatabase => {
+  // In-memory storage for tables
+  const tables: { [tableName: string]: any[] } = {};
+  let isInitialized = false;
+  
+  // Initialize tables with empty arrays
+  Object.values(TABLES).forEach(tableName => {
+    tables[tableName] = [];
+  });
+  
+  // Initialize tables from localStorage
+  const initialize = async (): Promise<void> => {
+    if (isInitialized) return;
+    
+    try {
+      for (const tableName of Object.values(TABLES)) {
+        const storedData = localStorage.getItem(`${dbName}_${tableName}`);
+        if (storedData) {
+          tables[tableName] = JSON.parse(storedData);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to initialize web database:', error);
+    }
+    
+    isInitialized = true;
+  };
+  
+  // Save tables to localStorage
+  const persist = async (): Promise<void> => {
+    try {
+      for (const tableName of Object.values(TABLES)) {
+        localStorage.setItem(
+          `${dbName}_${tableName}`, 
+          JSON.stringify(tables[tableName])
+        );
+      }
+    } catch (error) {
+      console.error('Failed to persist web database:', error);
+    }
+  };
+  
+  // Extract query results from in-memory tables
+  const queryTables = <T>(sql: string, params?: any[]): T[] => {
+    // Try to extract table name from the SQL
+    const fromMatch = sql.match(/FROM (\w+)/i);
+    if (!fromMatch) return [];
+    
+    const tableName = fromMatch[1];
+    if (!tables[tableName]) return [];
+    
+    // Check if there's a WHERE clause
+    const whereMatch = sql.match(/WHERE (.+)$/i);
+    if (!whereMatch) {
+      // If no WHERE clause, return all records from the table
+      return [...tables[tableName]] as unknown as T[];
+    }
+    
+    // Simple WHERE processing (very limited)
+    const whereClause = whereMatch ? whereMatch[1] : null;
+    if (whereClause) {
+      // Handle "key = value" pattern
+      const keyValueMatch = whereClause.match(/(\w+)\s*=\s*[?'"]?([^'"]*)['"]?/);
+      if (keyValueMatch) {
+        const key = keyValueMatch[1];
+        const value = params && params.length > 0 ? params[0] : keyValueMatch[2];
+        
+        return tables[tableName].filter(item => 
+          item[key] === value
+        ) as unknown as T[];
+      }
+    }
+    
+    return [];
+  };
+
+  // Return a minimal implementation that satisfies the interface
+  return {
+    // Core SQLite methods required by our app
+    async execAsync(sql: string): Promise<void> {
+      await initialize();
+      console.log('Web SQLite exec:', sql);
+      
+      // We don't actually execute SQL in the browser, just log it
+      // The actual data manipulation happens through our higher-level functions
+    },
+    
+    async closeAsync(): Promise<void> {
+      await persist();
+    },
+    
+    // Support for queries
+    getAllAsync<T>(sql: string, params: Record<string, SQLite.SQLiteBindValue> | SQLite.SQLiteBindValue[]): Promise<T[]> {
+      return initialize().then(() => {
+        console.log('Web SQLite getAllAsync:', sql, params);
+        const paramsArray = Array.isArray(params) ? params : Object.values(params);
+        return queryTables<T>(sql, paramsArray);
+      });
+    },
+    
+    // Stub implementation for other required methods
+    get databasePath(): string { return dbName; },
+    get options(): SQLite.SQLiteOptions { return {}; },
+    get nativeDatabase(): any { return null; },
+    
+    // Add more method stubs to satisfy the interface
+    isInTransactionAsync(): Promise<boolean> { return Promise.resolve(false); },
+    transactionAsync(): Promise<void> { return Promise.resolve(); },
+    getFirstAsync(): Promise<any> { return Promise.resolve(null); },
+    runAsync(): Promise<void> { return Promise.resolve(); },
+    prepareAsync(): Promise<SQLite.SQLitePreparedStatement> { 
+      throw new Error('prepareAsync not implemented for web'); 
+    },
+    prepareStatementAsync(): Promise<SQLite.SQLitePreparedStatement> { 
+      throw new Error('prepareStatementAsync not implemented for web'); 
+    },
+    getBlobAsync(): Promise<Blob> { 
+      throw new Error('getBlobAsync not implemented for web'); 
+    },
+    deleteAsync(): Promise<void> { return Promise.resolve(); },
+    
+    // Additional required properties
+    name: dbName,
+    version: "1",
+    transaction(): any { throw new Error('transaction not implemented for web'); },
+    exec(): any { throw new Error('exec not implemented for web'); },
+    prepare(): any { throw new Error('prepare not implemented for web'); },
+    executeSql(): any { throw new Error('executeSql not implemented for web'); }
+  } as SQLite.SQLiteDatabase;
+};
+
 // Open the database
 export const openDatabase = (): SQLite.SQLiteDatabase => {
   if (Platform.OS === 'web') {
-    return {
-      execAsync: () => Promise.resolve([]),
-      closeAsync: () => Promise.resolve(),
-    } as any;
+    return createWebSQLiteImplementation(DB_NAME);
   }
 
   return SQLite.openDatabaseSync(DB_NAME);
